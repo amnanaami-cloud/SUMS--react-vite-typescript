@@ -1,0 +1,70 @@
+{
+  "$meta": {
+    "name": "SUMS — Smart University Management System",
+    "institution": "University of Palestine · جامعة فلسطين",
+    "version": "1.0.0",
+    "updated": "2026-07-24"
+  },
+  "color": {
+    "brand": {
+      "primary": { "value": "#13737A", "comment": "Teal — primary actions, headers, active nav" },
+      "primaryDark": { "value": "#0D5257", "comment": "Hover / pressed" },
+      "primaryTint": { "value": "#E1F0F1", "comment": "Active nav bg, chips" },
+      "secondary": { "value": "#FBCA89", "comment": "Peach — warm accents, instructor" },
+      "gold": { "value": "#D4AF37", "comment": "Prestige, decorative rules, seal accent" }
+    },
+    "neutral": {
+      "50": "#F8F9FA", "100": "#E8EAED", "200": "#D1D5DB",
+      "400": "#9CA3AF", "500": "#6B7280", "700": "#374151", "900": "#1F2937"
+    },
+    "status": {
+      "success": "#10B981", "error": "#EF4444", "warning": "#F59E0B", "info": "#3B82F6"
+    },
+    "avatarByRole": {
+      "student": "#BFDBFE", "instructor": "#FBCA89", "advisor": "#A7F3D0",
+      "registrar": "#C7D2FE", "dean": "#F5E0A3", "depthead": "#FBCFE8",
+      "admin": "#9CA3AF", "coordinator": "#FDE68A", "uniregistrar": "#BAE6FD"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "heading": "'Playfair Display', 'Amiri', serif",
+      "body": "'Inter', 'Cairo', system-ui, sans-serif"
+    },
+    "scale": {
+      "h1": { "size": "32px", "lineHeight": "1.2", "weight": 700 },
+      "h2": { "size": "24px", "lineHeight": "1.2", "weight": 700 },
+      "h3": { "size": "18px", "lineHeight": "1.3", "weight": 600 },
+      "body": { "size": "14px", "lineHeight": "1.6", "weight": 400 },
+      "small": { "size": "12px", "lineHeight": "1.5", "weight": 400 }
+    }
+  },
+  "spacing": { "base": "8px", "scale": ["8px", "16px", "24px", "32px", "48px"] },
+  "radius": { "sm": "8px", "md": "10px", "lg": "14px", "xl": "16px", "pill": "999px" },
+  "shadow": {
+    "card": "0 2px 8px rgba(0,0,0,0.08)",
+    "elevated": "0 8px 24px rgba(0,0,0,0.12)",
+    "modal": "0 20px 60px rgba(0,0,0,0.30)"
+  },
+  "component": {
+    "button": {
+      "primary": { "bg": "{color.brand.primary}", "fg": "#FFFFFF", "hover": "{color.brand.primaryDark}", "radius": "{radius.md}", "padding": "13px 20px" },
+      "secondary": { "bg": "{color.brand.primaryTint}", "fg": "{color.brand.primary}" },
+      "disabled": { "bg": "{color.neutral.100}", "fg": "{color.neutral.400}" }
+    },
+    "input": {
+      "border": "1.5px solid {color.neutral.100}",
+      "borderFocus": "1.5px solid {color.brand.primary}",
+      "focusRing": "0 0 0 3px rgba(19,115,122,0.12)",
+      "radius": "{radius.md}"
+    },
+    "card": { "bg": "#FFFFFF", "radius": "{radius.lg}", "shadow": "{shadow.card}", "accentBorder": "4px solid <status>" }
+  },
+  "i18n": {
+    "languages": ["ar", "en"],
+    "default": "ar",
+    "direction": { "ar": "rtl", "en": "ltr" },
+    "sidebar": { "ar": "right", "en": "left" }
+  },
+  "roles": ["student", "instructor", "advisor", "registrar", "admin", "depthead", "coordinator", "dean", "uniregistrar"]
+}
