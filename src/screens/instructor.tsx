@@ -1,123 +1,365 @@
-import { Icon } from '../icons';
+import { FormEvent, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { announcementsApi } from '../api/announcements';
+import { attendanceApi } from '../api/attendance';
+import { ApiError } from '../api/errors';
+import { gradesApi } from '../api/grades';
+import { useAnnouncementsQuery, useDashboardQuery, useMyCoursesQuery } from '../api/hooks';
+import type { InstructorCourseAssignment } from '../api/types';
+import { AsyncState } from '../components/AsyncState';
+import { SectionTitle, StatGrid } from '../components/ui';
 import { useStore } from '../store';
-import { ROSTER } from '../data';
-import { StatGrid, useStatCards, SectionTitle } from '../components/ui';
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 export function InstructorDashboard() {
-  const { L, cn, nav } = useStore();
-  const stats = useStatCards();
-  const classes: [string, string, number, string, string][] = [
-    ['CS301', cn('Data Structures', 'هياكل البيانات'), 35, cn('Sun/Tue 09:00', 'أحد/ثلاثاء ٠٩:٠٠'), 'B-204'],
-    ['CS340', cn('Operating Systems', 'نظم التشغيل'), 28, cn('Mon/Wed 11:00', 'إثنين/أربعاء ١١:٠٠'), 'A-110'],
-    ['CS410', cn('Machine Learning', 'تعلم الآلة'), 33, cn('Thu 10:00', 'خميس ١٠:٠٠'), 'B-210'],
+  const { L, ar, cn, nav } = useStore();
+  const dashboard = useDashboardQuery();
+  const courses = useMyCoursesQuery();
+  const stat = (key: string) => String(dashboard.data?.stats[key] ?? '—');
+  const cards: [string, string, string, string, string][] = [
+    ['book', L.myClasses, stat('classes'), cn('this term', 'هذا الفصل'), '#13737A'],
+    ['users', cn('Total Students', 'مجموع الطلاب'), stat('students'), cn('across classes', 'في الصفوف'), '#FBCA89'],
+    ['check', cn('Attendance Due', 'حضور مستحق'), stat('openAttendance'), cn('sessions', 'جلسات'), '#F59E0B'],
+    ['chart', cn('Grades Pending', 'درجات معلقة'), stat('pendingGrades'), cn('sheets', 'كشوف'), '#EF4444'],
   ];
+  const assignments = courses.data?.filter((item): item is InstructorCourseAssignment => !('status' in item)) ?? [];
   return (
-    <>
-      <StatGrid items={stats} />
+    <AsyncState loading={dashboard.isLoading || courses.isLoading} error={dashboard.error ?? courses.error}>
+      <StatGrid items={cards} />
       <SectionTitle>{L.myClasses}</SectionTitle>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 16 }}>
-        {classes.map((c) => (
-          <div key={c[0]} className="card card-pad">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-              <div><div style={{ fontWeight: 800, color: '#13737A' }}>{c[0]}</div><div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>{c[1]}</div></div>
-              <span className="badge" style={{ background: '#FDF0DE', color: '#92400E' }}>{c[2]} 👥</span>
+      <div className="card-grid">
+        {assignments.map(({ id, section }) => (
+          <div key={id} className="card card-pad">
+            <div className="row-between">
+              <div>
+                <strong className="teal">{section.course.code}</strong>
+                <div>{ar ? section.course.nameAr : section.course.nameEn}</div>
+              </div>
+              <span className="badge">{section._count?.enrollments ?? section.enrolledCount} students</span>
             </div>
-            <div style={{ fontSize: 12, color: '#6B7280', margin: '12px 0' }}>{c[3]} · {c[4]}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-tint" style={{ flex: 1 }} onClick={() => nav('attendance')}>{L.m_attendance}</button>
-              <button style={{ flex: 1, padding: 8, background: '#FDF0DE', color: '#92400E', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }} onClick={() => nav('grades')}>{L.gradeEntry}</button>
+            <small>
+              {section.sectionCode} · {section.term.code}
+            </small>
+            <div className="row-actions">
+              <button className="btn-tint" onClick={() => nav('attendance')}>
+                {L.m_attendance}
+              </button>
+              <button className="btn-tint" onClick={() => nav('grades')}>
+                {L.gradeEntry}
+              </button>
             </div>
           </div>
         ))}
       </div>
-    </>
+    </AsyncState>
   );
 }
 
 export function InstructorAttendance() {
-  const { s, L, ar, cn, setAtt, allAtt, toast } = useStore();
-  const pb = (on: boolean, color: string): React.CSSProperties => ({ padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + (on ? color : '#E8EAED'), background: on ? color : '#fff', color: on ? '#fff' : '#6B7280' });
+  const { L, ar, cn, toast } = useStore();
+  const [sectionId, setSectionId] = useState('');
+  const [marks, setMarks] = useState<Record<string, 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'>>({});
+  const sections = useQuery({ queryKey: ['attendance-sections'], queryFn: attendanceApi.sections });
+  const selectedSectionId = sectionId || sections.data?.[0]?.sectionId || '';
+  const roster = useQuery({
+    queryKey: ['attendance-roster', selectedSectionId],
+    queryFn: () => attendanceApi.roster(selectedSectionId),
+    enabled: Boolean(selectedSectionId),
+  });
+  const save = useMutation({
+    mutationFn: async () => {
+      const session = await attendanceApi.createSession(
+        selectedSectionId,
+        today(),
+        `${new Date().getUTCHours().toString().padStart(2, '0')}:00:00`,
+      );
+      const records = (roster.data ?? []).map((enrollment) => ({
+        enrollmentId: enrollment.id,
+        status: marks[enrollment.id] ?? 'PRESENT',
+      }));
+      return attendanceApi.save(session.id, records);
+    },
+    onSuccess: () => toast(cn('Attendance submitted.', 'تم إرسال الحضور.')),
+    onError: (error) => toast(error instanceof ApiError ? error.code : 'REQUEST_FAILED'),
+  });
+  const markAll = (status: 'PRESENT' | 'ABSENT') =>
+    setMarks(Object.fromEntries((roster.data ?? []).map((entry) => [entry.id, status])));
+  const statuses = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const;
   return (
-    <div className="tbl-wrap">
-      <div style={{ padding: '16px 22px', borderBottom: '1px solid #F1F3F4', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>CS301 · {cn('July 24, 2026', '٢٤ تموز ٢٠٢٦')}</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{ padding: '8px 14px', background: '#DCFCE7', color: '#166534', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }} onClick={() => allAtt('p', ROSTER.map((r) => r[2]))}>{L.markAllPresent}</button>
-          <button style={{ padding: '8px 14px', background: '#FEE2E2', color: '#991B1B', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }} onClick={() => allAtt('a', ROSTER.map((r) => r[2]))}>{L.markAllAbsent}</button>
+    <>
+      <div className="card toolbar">
+        <select
+          value={selectedSectionId}
+          onChange={(event) => {
+            setSectionId(event.target.value);
+            setMarks({});
+          }}
+        >
+          {sections.data?.map((assignment) => (
+            <option key={assignment.sectionId} value={assignment.sectionId}>
+              {assignment.section.course.code} · {assignment.section.sectionCode}
+            </option>
+          ))}
+        </select>
+        <div className="row-actions">
+          <button className="btn-tint" onClick={() => markAll('PRESENT')}>
+            {L.markAllPresent}
+          </button>
+          <button className="btn-danger-soft" onClick={() => markAll('ABSENT')}>
+            {L.markAllAbsent}
+          </button>
         </div>
       </div>
-      {ROSTER.map((r) => {
-        const v = s.att[r[2]];
-        return (
-          <div key={r[2]} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 22px', borderBottom: '1px solid #F1F3F4' }}>
-            <div className="avatar" style={{ width: 36, height: 36, fontSize: 13, background: '#DBEAFE', color: '#1E40AF' }}>{(ar ? r[1] : r[0]).slice(0, 1)}</div>
-            <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{cn(r[0], r[1])}</div><div style={{ fontSize: 12, color: '#9CA3AF' }}>{r[2]}</div></div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button style={pb(v === 'p', '#10B981')} onClick={() => setAtt(r[2], 'p')}>{L.present}</button>
-              <button style={pb(v === 'a', '#EF4444')} onClick={() => setAtt(r[2], 'a')}>{L.absent}</button>
-            </div>
+      <AsyncState
+        loading={sections.isLoading || roster.isLoading}
+        error={sections.error ?? roster.error}
+        empty={!roster.data?.length}
+      >
+        <div className="tbl-wrap">
+          {roster.data?.map((enrollment) => {
+            const user = enrollment.student.user;
+            const name = ar ? `${user.firstNameAr} ${user.lastNameAr}` : `${user.firstNameEn} ${user.lastNameEn}`;
+            return (
+              <div key={enrollment.id} className="roster-row">
+                <div>
+                  <strong>{name}</strong>
+                  <small>{enrollment.student.universityId}</small>
+                </div>
+                <div className="row-actions">
+                  {statuses.map((status) => (
+                    <button
+                      key={status}
+                      className={(marks[enrollment.id] ?? 'PRESENT') === status ? 'btn-teal' : 'btn-tint'}
+                      onClick={() => setMarks((previous) => ({ ...previous, [enrollment.id]: status }))}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div className="table-actions">
+            <button
+              className="btn-primary inline"
+              disabled={!roster.data?.length || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? cn('Submitting…', 'جارٍ الإرسال…') : L.submitAttendance}
+            </button>
           </div>
-        );
-      })}
-      <div style={{ padding: '16px 22px', textAlign: 'end' }}>
-        <button className="btn-primary" style={{ width: 'auto', display: 'inline-flex' }} onClick={() => toast(cn('Attendance submitted', 'تم إرسال الحضور'))}>{L.submitAttendance}</button>
-      </div>
-    </div>
+        </div>
+      </AsyncState>
+    </>
   );
 }
 
 export function InstructorGrades() {
   const { L, ar, cn, toast } = useStore();
-  const scores = [88, 76, 92, 64, 81, 95];
+  const [sectionId, setSectionId] = useState('');
+  const [assessmentId, setAssessmentId] = useState('');
+  const [scores, setScores] = useState<Record<string, string>>({});
+  const courses = useMyCoursesQuery();
+  const assignments = courses.data?.filter((item): item is InstructorCourseAssignment => !('status' in item)) ?? [];
+  const selectedSectionId = sectionId || assignments[0]?.section.id || '';
+  const section = useQuery({
+    queryKey: ['grade-section', selectedSectionId],
+    queryFn: () => gradesApi.section(selectedSectionId),
+    enabled: Boolean(selectedSectionId),
+  });
+  const selectedAssessmentId = section.data?.assessments.some((item) => item.id === assessmentId)
+    ? assessmentId
+    : (section.data?.assessments[0]?.id ?? '');
+  const assessment = section.data?.assessments.find((item) => item.id === selectedAssessmentId);
+  const client = useQueryClient();
+  const save = useMutation({
+    mutationFn: () =>
+      gradesApi.saveScores(
+        selectedAssessmentId,
+        (section.data?.enrollments ?? []).map((enrollment) => ({
+          enrollmentId: enrollment.id,
+          score: Number(
+            scores[enrollment.id] ??
+              assessment?.grades.find((grade) => grade.enrollmentId === enrollment.id)?.score ??
+              0,
+          ),
+        })),
+      ),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['grade-section', selectedSectionId] });
+      toast(cn('Grades saved.', 'تم حفظ الدرجات.'));
+    },
+    onError: (error) => toast(error instanceof ApiError ? error.code : 'REQUEST_FAILED'),
+  });
+  const submit = useMutation({
+    mutationFn: () => gradesApi.submit(selectedSectionId),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['grade-section', selectedSectionId] });
+      toast(cn('Grade sheet submitted.', 'تم إرسال كشف الدرجات.'));
+    },
+    onError: (error) => toast(error instanceof ApiError ? error.code : 'REQUEST_FAILED'),
+  });
   return (
-    <div className="tbl-wrap">
-      <div className="tbl-head">CS301 · {L.gradeEntry} — {L.thAssessment}: Final Exam (40%)</div>
-      {ROSTER.map((r, i) => (
-        <div key={r[2]} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 22px', borderBottom: '1px solid #F1F3F4' }}>
-          <div className="avatar" style={{ width: 36, height: 36, fontSize: 13, background: '#DBEAFE', color: '#1E40AF' }}>{(ar ? r[1] : r[0]).slice(0, 1)}</div>
-          <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{cn(r[0], r[1])}</div><div style={{ fontSize: 12, color: '#9CA3AF' }}>{r[2]}</div></div>
-          <input defaultValue={scores[i]} style={{ width: 70, padding: '8px 10px', border: '1.5px solid #E8EAED', borderRadius: 8, textAlign: 'center', fontWeight: 600, outline: 'none' }} />
-          <span style={{ fontSize: 13, color: '#9CA3AF' }}>/ 100</span>
-        </div>
-      ))}
-      <div style={{ padding: '16px 22px', textAlign: 'end' }}>
-        <button className="btn-primary" style={{ width: 'auto', display: 'inline-flex' }} onClick={() => toast(cn('Grades saved', 'تم حفظ الدرجات'))}>{L.saveGrades}</button>
+    <>
+      <div className="card toolbar">
+        <select
+          value={selectedSectionId}
+          onChange={(event) => {
+            setSectionId(event.target.value);
+            setAssessmentId('');
+            setScores({});
+          }}
+        >
+          {assignments.map(({ section: item }) => (
+            <option key={item.id} value={item.id}>
+              {item.course.code} · {item.sectionCode}
+            </option>
+          ))}
+        </select>
+        <select
+          value={selectedAssessmentId}
+          onChange={(event) => {
+            setAssessmentId(event.target.value);
+            setScores({});
+          }}
+        >
+          {section.data?.assessments.map((item) => (
+            <option key={item.id} value={item.id}>
+              {ar ? item.nameAr : item.nameEn} ({item.weight}%)
+            </option>
+          ))}
+        </select>
       </div>
-    </div>
+      <AsyncState
+        loading={courses.isLoading || section.isLoading}
+        error={courses.error ?? section.error}
+        empty={!section.data?.enrollments.length || !assessment}
+      >
+        <div className="tbl-wrap">
+          <div className="tbl-head">
+            {section.data?.course.code} · {assessment ? (ar ? assessment.nameAr : assessment.nameEn) : L.gradeEntry}
+          </div>
+          {section.data?.enrollments.map((enrollment) => {
+            const user = enrollment.student.user;
+            const name = ar ? `${user.firstNameAr} ${user.lastNameAr}` : `${user.firstNameEn} ${user.lastNameEn}`;
+            const savedScore = assessment?.grades.find((grade) => grade.enrollmentId === enrollment.id)?.score ?? '';
+            return (
+              <div key={enrollment.id} className="roster-row">
+                <div>
+                  <strong>{name}</strong>
+                  <small>{enrollment.student.universityId}</small>
+                </div>
+                <label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={assessment?.maxScore}
+                    step="0.01"
+                    value={scores[enrollment.id] ?? savedScore}
+                    onChange={(event) =>
+                      setScores((previous) => ({ ...previous, [enrollment.id]: event.target.value }))
+                    }
+                  />{' '}
+                  / {assessment?.maxScore}
+                </label>
+              </div>
+            );
+          })}
+          <div className="table-actions row-actions">
+            <button className="btn-tint" disabled={!assessment || save.isPending} onClick={() => save.mutate()}>
+              {L.saveGrades}
+            </button>
+            <button
+              className="btn-primary inline"
+              disabled={!section.data?.assessments.length || submit.isPending}
+              onClick={() => submit.mutate()}
+            >
+              {cn('Submit grade sheet', 'إرسال كشف الدرجات')}
+            </button>
+          </div>
+        </div>
+      </AsyncState>
+    </>
   );
 }
 
 export function InstructorAnnouncements() {
-  const { L, cn, toast } = useStore();
-  const ann: [string, string, string, string][] = [
-    [cn('Jul 22', '٢٢ تموز'), '#EF4444', cn('Quiz 3 moved to Sunday', 'نُقل الاختبار ٣ للأحد'), cn('New date posted on the portal.', 'نُشر الموعد الجديد على البوابة.')],
-    [cn('Jul 19', '١٩ تموز'), '#13737A', cn('Project groups finalized', 'تم تحديد مجموعات المشروع'), cn('Check your group under Classes.', 'راجع مجموعتك في الصفوف.')],
-  ];
+  const { L, ar, cn, toast } = useStore();
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [sectionId, setSectionId] = useState('');
+  const courses = useMyCoursesQuery();
+  const announcements = useAnnouncementsQuery();
+  const client = useQueryClient();
+  const assignments = courses.data?.filter((item): item is InstructorCourseAssignment => !('status' in item)) ?? [];
+  const selectedSectionId = sectionId || assignments[0]?.section.id || '';
+  const create = useMutation({
+    mutationFn: () =>
+      announcementsApi.create({
+        titleEn: title,
+        titleAr: title,
+        bodyEn: message,
+        bodyAr: message,
+        severity: 'INFO',
+        audienceType: 'SECTION',
+        sectionId: selectedSectionId,
+      }),
+    onSuccess: async () => {
+      setTitle('');
+      setMessage('');
+      await client.invalidateQueries({ queryKey: ['announcements'] });
+      toast(cn('Announcement published.', 'تم نشر الإعلان.'));
+    },
+    onError: (error) => toast(error instanceof ApiError ? error.code : 'REQUEST_FAILED'),
+  });
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    create.mutate();
+  };
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
-      <div className="card card-pad">
+    <div className="responsive-two-column">
+      <form className="card card-pad" onSubmit={submit}>
         <SectionTitle>{L.createAnn}</SectionTitle>
         <label className="field-label">{L.annTitle}</label>
-        <input className="inp" style={{ marginBottom: 14 }} />
+        <input
+          className="inp"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          required
+          maxLength={200}
+        />
         <label className="field-label">{L.annMsg}</label>
-        <textarea className="inp" style={{ minHeight: 96, marginBottom: 14, resize: 'vertical' }} />
+        <textarea
+          className="inp"
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          required
+          maxLength={5000}
+        />
         <label className="field-label">{L.annClasses}</label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0 16px' }}>
-          <span className="badge" style={{ background: '#E1F0F1', color: '#13737A' }}>CS301 ✓</span>
-          <span className="badge" style={{ background: '#E1F0F1', color: '#13737A' }}>CS340 ✓</span>
-          <span className="badge" style={{ background: '#F1F3F4', color: '#6B7280' }}>CS410</span>
-        </div>
-        <button className="btn-primary" onClick={() => toast(cn('Announcement published', 'تم نشر الإعلان'))}>{L.publish}</button>
-      </div>
+        <select value={selectedSectionId} onChange={(event) => setSectionId(event.target.value)} required>
+          {assignments.map(({ section }) => (
+            <option key={section.id} value={section.id}>
+              {section.course.code} · {section.sectionCode}
+            </option>
+          ))}
+        </select>
+        <button className="btn-primary" disabled={create.isPending || !selectedSectionId}>
+          {L.publish}
+        </button>
+      </form>
       <div className="card card-pad">
         <SectionTitle>{L.pastAnn}</SectionTitle>
-        {ann.map((a, i) => (
-          <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid #F1F3F4' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: a[1] }} /><span style={{ fontSize: 11, color: '#9CA3AF' }}>{a[0]}</span></div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{a[2]}</div>
-            <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 1.5 }}>{a[3]}</div>
-          </div>
-        ))}
+        <AsyncState loading={announcements.isLoading} error={announcements.error} empty={!announcements.data?.length}>
+          {announcements.data?.map((item) => (
+            <div key={item.id} className="announcement-row">
+              <small>{item.publishedAt ? new Date(item.publishedAt).toLocaleDateString() : ''}</small>
+              <strong>{ar ? item.titleAr : item.titleEn}</strong>
+              <p>{ar ? item.bodyAr : item.bodyEn}</p>
+            </div>
+          ))}
+        </AsyncState>
       </div>
     </div>
   );

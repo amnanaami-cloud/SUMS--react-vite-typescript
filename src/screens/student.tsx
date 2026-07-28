@@ -1,115 +1,232 @@
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AsyncState } from '../components/AsyncState';
+import { Bar, GradeBadge, SectionTitle, StatGrid } from '../components/ui';
 import { Icon } from '../icons';
+import { registrationsApi } from '../api/registrations';
+import { gradesApi } from '../api/grades';
+import { ApiError } from '../api/errors';
+import {
+  useAnnouncementsQuery,
+  useAttendanceSummaryQuery,
+  useCoursesQuery,
+  useDashboardQuery,
+  useMyCoursesQuery,
+  useScheduleQuery,
+  useTranscriptQuery,
+} from '../api/hooks';
+import type { CourseSection, StudentCourseEnrollment } from '../api/types';
 import { useStore } from '../store';
-import { COURSES, GRADES, ATT, TS, NAMES } from '../data';
-import { StatGrid, useStatCards, SectionTitle, Bar, Badge, GradeBadge } from '../components/ui';
+
+const time = (value: string) =>
+  new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+const formatDate = (value: string | null) => (value ? new Date(value).toLocaleDateString() : '');
 
 export function StudentDashboard() {
-  const { L, ar, cn } = useStore();
-  const stats = useStatCards();
-  const nm = NAMES.student;
-  const sched: [string, string, string, string, string, string][] = [
-    ['09:00', 'B-204', cn('Data Structures', 'هياكل البيانات'), 'CS301', cn('Dr. Khalil', 'د. خليل'), '#13737A'],
-    ['11:00', 'A-110', cn('Operating Systems', 'نظم التشغيل'), 'CS340', cn('Dr. Odeh', 'د. عودة'), '#D4AF37'],
-    ['12:30', 'B-201', cn('Database Systems', 'نظم قواعد البيانات'), 'CS355', cn('Dr. Saleh', 'د. صالح'), '#3B82F6'],
-  ];
-  const ann: [string, string, string, string][] = [
-    [cn('Jul 22', '٢٢ تموز'), '#EF4444', cn('Final exam schedule posted', 'نشر جدول الامتحانات النهائية'), cn('Check your exam times under Transcript.', 'راجع مواعيد امتحاناتك في كشف الدرجات.')],
-    [cn('Jul 20', '٢٠ تموز'), '#13737A', cn('Add/Drop deadline: Aug 5', 'آخر موعد للإضافة/الحذف: ٥ آب'), cn('Changes after this date need approval.', 'التغييرات بعد هذا التاريخ تحتاج موافقة.')],
-    [cn('Jul 18', '١٨ تموز'), '#D4AF37', cn('Library hours extended', 'تمديد ساعات المكتبة'), cn('Open until midnight during finals.', 'مفتوحة حتى منتصف الليل خلال الامتحانات.')],
+  const { s, L, ar, cn } = useStore();
+  const dashboard = useDashboardQuery();
+  const schedule = useScheduleQuery();
+  const announcements = useAnnouncementsQuery();
+  const data = dashboard.data;
+  const stat = (key: string) => String(data?.stats[key] ?? '—');
+  const required = Number(data?.stats.requiredCredits ?? 0);
+  const earned = Number(data?.stats.earnedCredits ?? 0);
+  const progress = required ? Math.trunc((earned / required) * 100) : 0;
+  const cards: [string, string, string, string, string][] = [
+    [
+      'home',
+      cn('Enrolled Courses', 'المواد المسجلة'),
+      stat('enrolledCourses'),
+      cn('this semester', 'هذا الفصل'),
+      '#13737A',
+    ],
+    ['chart', L.cumGpa, stat('cumulativeGpa'), cn('of 4.0', 'من 4.0'), '#D4AF37'],
+    ['check', cn('Attendance', 'الحضور'), `${stat('attendancePercent')}%`, cn('overall', 'إجمالي'), '#10B981'],
+    ['graduation', cn('Progress', 'التقدم'), `${progress}%`, `${earned} / ${required} ${L.creditsLabel}`, '#3B82F6'],
   ];
   return (
-    <>
+    <AsyncState loading={dashboard.isLoading} error={dashboard.error}>
       <div className="hero">
         <div>
           <div style={{ fontSize: 14, opacity: 0.85 }}>{L.welcome}</div>
-          <div className="name">{nm[ar ? 1 : 0]}</div>
-          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>{cn('Computer Science', 'علوم الحاسوب')} · {L.yearLabel} {ar ? '٣' : '3'} · ID 2021054</div>
+          <div className="name">{s.user ? (ar ? s.user.nameAr : s.user.nameEn) : ''}</div>
+          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>{s.user?.universityId}</div>
         </div>
-        <div className="gpa-box"><div className="big">3.62</div><div style={{ fontSize: 12, opacity: 0.85 }}>{L.cumGpa}</div></div>
+        <div className="gpa-box">
+          <div className="big">{stat('cumulativeGpa')}</div>
+          <div style={{ fontSize: 12, opacity: 0.85 }}>{L.cumGpa}</div>
+        </div>
       </div>
-      <StatGrid items={stats} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20 }}>
+      <StatGrid items={cards} />
+      <div className="responsive-two-column">
         <div className="card card-pad">
           <SectionTitle>{L.todaySchedule}</SectionTitle>
-          {sched.map((t, i) => (
-            <div key={i} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid #F1F3F4' }}>
-              <div style={{ textAlign: 'center', flex: 'none', width: 66 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#13737A' }}>{t[0]}</div>
-                <div style={{ fontSize: 11, color: '#9CA3AF' }}>{t[1]}</div>
+          <AsyncState loading={schedule.isLoading} error={schedule.error} empty={!schedule.data?.length}>
+            {schedule.data?.map((meeting) => (
+              <div key={meeting.id} className="record-row">
+                <div className="record-time">
+                  {time(meeting.startsAt)}
+                  <small>{meeting.room?.code ?? '—'}</small>
+                </div>
+                <div>
+                  <strong>
+                    {meeting.section?.course.code} ·{' '}
+                    {ar ? meeting.section?.course.nameAr : meeting.section?.course.nameEn}
+                  </strong>
+                  <small>{meeting.section?.sectionCode}</small>
+                </div>
               </div>
-              <div style={{ width: 3, borderRadius: 2, background: t[5] }} />
-              <div><div style={{ fontWeight: 600, fontSize: 14 }}>{t[2]}</div><div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{t[3]} · {t[4]}</div></div>
-            </div>
-          ))}
+            ))}
+          </AsyncState>
         </div>
         <div className="card card-pad">
           <SectionTitle>{L.announcements2}</SectionTitle>
-          {ann.map((a, i) => (
-            <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid #F1F3F4' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: a[1] }} /><span style={{ fontSize: 11, color: '#9CA3AF' }}>{a[0]}</span></div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{a[2]}</div>
-              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 1.5 }}>{a[3]}</div>
-            </div>
-          ))}
+          <AsyncState loading={announcements.isLoading} error={announcements.error} empty={!announcements.data?.length}>
+            {announcements.data?.slice(0, 5).map((item) => (
+              <div key={item.id} className="announcement-row">
+                <small>{formatDate(item.publishedAt)}</small>
+                <strong>{ar ? item.titleAr : item.titleEn}</strong>
+                <p>{ar ? item.bodyAr : item.bodyEn}</p>
+              </div>
+            ))}
+          </AsyncState>
         </div>
       </div>
-    </>
+    </AsyncState>
+  );
+}
+
+function SectionCard({
+  section,
+  selected,
+  onToggle,
+}: {
+  section: CourseSection;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const { L, ar, cn } = useStore();
+  const full = section.enrolledCount >= section.capacity;
+  const meeting = section.meetings[0];
+  const instructor = section.instructors?.[0]?.instructor.user;
+  return (
+    <div
+      className="card"
+      style={{ padding: '18px 20px', marginBottom: 12, border: `1.5px solid ${selected ? '#13737A' : 'transparent'}` }}
+    >
+      <div className="row-between" style={{ gap: 12, alignItems: 'start' }}>
+        <div>
+          <div className="course-title">
+            <strong>{section.course.code}</strong>
+            <span>{ar ? section.course.nameAr : section.course.nameEn}</span>
+            <span className="badge">
+              {section.course.credits} {L.creditsLabel}
+            </span>
+          </div>
+          <div className="course-meta">
+            <span>
+              <Icon name="clock" size={15} /> {meeting ? `${meeting.dayOfWeek} · ${time(meeting.startsAt)}` : 'TBA'}
+            </span>
+            <span>
+              <Icon name="pin" size={15} /> {meeting?.room?.code ?? 'TBA'}
+            </span>
+            <span>
+              <Icon name="user" size={15} />{' '}
+              {instructor
+                ? ar
+                  ? `${instructor.firstNameAr} ${instructor.lastNameAr}`
+                  : `${instructor.firstNameEn} ${instructor.lastNameEn}`
+                : 'TBA'}
+            </span>
+          </div>
+          <small>
+            {Math.max(0, section.capacity - section.enrolledCount)} {cn('seats left', 'مقعد متبقٍ')} · {L.prereq}:{' '}
+            {section.course.prerequisites?.map((p) => p.prerequisite.code).join(', ') || cn('None', 'لا يوجد')}
+          </small>
+        </div>
+        <button type="button" onClick={onToggle} className={selected ? 'btn-danger-soft' : 'btn-teal'}>
+          {selected ? L.remove : full ? cn('Join waitlist', 'الانضمام لقائمة الانتظار') : L.add}
+        </button>
+      </div>
+    </div>
   );
 }
 
 export function StudentRegistration() {
   const { s, L, cn, toggleCart, toast } = useStore();
-  const cartItems = COURSES.filter((c) => s.cart.includes(c.code));
-  const credits = cartItems.reduce((a, c) => a + c.cr, 0);
+  const [search, setSearch] = useState('');
+  const courses = useCoursesQuery(search);
+  const client = useQueryClient();
+  const selected = useMemo(
+    () => courses.data?.filter((section) => s.cart.includes(section.id)) ?? [],
+    [courses.data, s.cart],
+  );
+  const submit = useMutation({
+    mutationFn: () => {
+      const termId = selected[0]?.term.id;
+      if (!termId || selected.some((section) => section.term.id !== termId)) throw new Error('TERM_SELECTION_REQUIRED');
+      return registrationsApi.submit(
+        termId,
+        selected.map((section) => section.id),
+      );
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['registrations'] });
+      toast(cn('Registration submitted for advisor approval.', 'تم إرسال التسجيل لموافقة المرشد.'));
+    },
+    onError: (error) => toast(error instanceof ApiError ? error.code : cn('Registration failed.', 'تعذر التسجيل.')),
+  });
+  const credits = selected.reduce((sum, section) => sum + section.course.credits, 0);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+    <div className="registration-layout">
       <div>
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 16 }}>
-          <span style={{ color: '#9CA3AF' }}><Icon name="search" size={18} /></span>
-          <input placeholder={L.searchCourses} style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, background: 'none' }} />
-          <span style={{ fontSize: 12, color: '#6B7280', background: '#F1F3F4', padding: '5px 12px', borderRadius: 999 }}>{cn('Fall 2026', 'خريف ٢٠٢٦')}</span>
+        <div className="card search-row">
+          <Icon name="search" size={18} />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={L.searchCourses} />
         </div>
-        {COURSES.map((c) => {
-          const inCart = s.cart.includes(c.code); const full = c.seats === 0;
-          const cap = full ? '#EF4444' : c.seats < 5 ? '#F59E0B' : '#10B981';
-          return (
-            <div key={c.code} className="card" style={{ padding: '18px 20px', marginBottom: 12, border: '1.5px solid ' + (inCart ? '#13737A' : 'transparent') }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 800, color: '#13737A', fontSize: 15 }}>{c.code}</span>
-                    <span style={{ fontWeight: 600, fontSize: 15 }}>{cn(c.en, c.ar)}</span>
-                    <span className="badge" style={{ background: '#E1F0F1', color: '#13737A' }}>{c.cr} {L.creditsLabel}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    <span><Icon name="clock" size={15} /> {cn(c.sch, c.schAr)}</span>
-                    <span><Icon name="pin" size={15} /> {c.room}</span>
-                    <span><Icon name="user" size={15} /> {cn(c.instr, c.instrAr)}</span>
-                  </div>
-                  <div style={{ fontSize: 12, marginTop: 8, color: cap }}>{full ? cn('Full — waitlist', 'ممتلئة — قائمة انتظار') : c.seats + ' ' + cn('seats left', 'مقعد متبقٍ')} · {L.prereq}: {c.pre}</div>
-                </div>
-                {full ? (
-                  <button className="btn-teal" style={{ background: '#F1F3F4', color: '#9CA3AF', cursor: 'not-allowed' }}>{cn('Full', 'ممتلئة')}</button>
-                ) : (
-                  <button onClick={() => toggleCart(c.code)} className={inCart ? '' : 'btn-teal'} style={inCart ? { padding: '9px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', background: '#FEE2E2', color: '#991B1B' } : undefined}>{inCart ? L.remove : L.add}</button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <AsyncState loading={courses.isLoading} error={courses.error} empty={!courses.data?.length}>
+          {courses.data?.map((section) => (
+            <SectionCard
+              key={section.id}
+              section={section}
+              selected={s.cart.includes(section.id)}
+              onToggle={() => toggleCart(section.id)}
+            />
+          ))}
+        </AsyncState>
       </div>
-      <div className="card" style={{ overflow: 'hidden', position: 'sticky', top: 0 }}>
-        <div style={{ background: '#13737A', color: '#fff', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}><Icon name="cart" size={19} />{L.cart}</div>
-        <div style={{ padding: '16px 20px' }}>
-          {cartItems.length ? cartItems.map((c) => (
-            <div key={c.code} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #F1F3F4' }}>
-              <div><div style={{ fontWeight: 600, fontSize: 13 }}>{c.code}</div><div style={{ fontSize: 11, color: '#6B7280' }}>{cn(c.en, c.ar)}</div></div>
-              <button onClick={() => toggleCart(c.code)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{L.remove}</button>
-            </div>
-          )) : <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 13, padding: '24px 0' }}>{L.cartEmpty}</div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginTop: 16, paddingTop: 14, borderTop: '2px solid #F1F3F4' }}><span>{L.totalCredits}</span><span style={{ color: '#13737A' }}>{credits}</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 9, padding: '9px 12px', marginTop: 14, fontSize: 12, color: '#92400E' }}><Icon name="clock" size={15} />{L.approvalPending}</div>
-          <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => toast(cn('Registration submitted for advisor approval', 'تم إرسال التسجيل لموافقة المرشد'))}>{L.submitReg}</button>
+      <div className="card registration-cart">
+        <div className="cart-head">
+          <Icon name="cart" size={19} />
+          {L.cart}
+        </div>
+        <div className="card-pad">
+          {selected.length ? (
+            selected.map((section) => (
+              <div key={section.id} className="record-row">
+                <div>
+                  <strong>{section.course.code}</strong>
+                  <small>{section.course.nameEn}</small>
+                </div>
+                <button type="button" className="link-peach" onClick={() => toggleCart(section.id)}>
+                  {L.remove}
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="empty-text">{L.cartEmpty}</p>
+          )}
+          <div className="row-between total-row">
+            <strong>{L.totalCredits}</strong>
+            <strong>{credits}</strong>
+          </div>
+          <button
+            className="btn-primary"
+            disabled={!selected.length || submit.isPending}
+            onClick={() => submit.mutate()}
+          >
+            {submit.isPending ? cn('Submitting…', 'جارٍ الإرسال…') : L.submitReg}
+          </button>
         </div>
       </div>
     </div>
@@ -117,131 +234,237 @@ export function StudentRegistration() {
 }
 
 export function StudentCourses() {
-  const { L, cn } = useStore();
+  const { L, ar, cn, toast } = useStore();
+  const courses = useMyCoursesQuery();
+  const client = useQueryClient();
+  const drop = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => registrationsApi.drop(id, reason),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['my-courses'] });
+      toast(cn('Course dropped.', 'تم حذف المادة.'));
+    },
+    onError: (error) => toast(error instanceof ApiError ? error.code : 'REQUEST_FAILED'),
+  });
+  const enrollments = courses.data?.filter((item): item is StudentCourseEnrollment => 'status' in item) ?? [];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {COURSES.map((c) => (
-        <div key={c.code} className="card" style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontWeight: 800, color: '#13737A' }}>{c.code}</span>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>{cn(c.en, c.ar)}</span>
-              <span className="badge" style={{ background: '#E1F0F1', color: '#13737A' }}>{c.cr} {L.creditsLabel}</span>
+    <AsyncState loading={courses.isLoading} error={courses.error} empty={!enrollments.length}>
+      <div className="stack">
+        {enrollments.map((enrollment) => (
+          <div key={enrollment.id} className="card course-row">
+            <div>
+              <strong>
+                {enrollment.section.course.code} ·{' '}
+                {ar ? enrollment.section.course.nameAr : enrollment.section.course.nameEn}
+              </strong>
+              <small>
+                {enrollment.section.sectionCode} · {enrollment.section.course.credits} {L.creditsLabel}
+              </small>
             </div>
-            <div style={{ fontSize: 12, color: '#6B7280', marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <span><Icon name="clock" size={15} /> {cn(c.sch, c.schAr)}</span>
-              <span><Icon name="pin" size={15} /> {c.room}</span>
-              <span><Icon name="user" size={15} /> {cn(c.instr, c.instrAr)}</span>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="btn-tint"
+                disabled
+                title={cn('Syllabus upload is not configured', 'رفع الخطة غير مهيأ')}
+              >
+                {L.syllabus}
+              </button>
+              {enrollment.status === 'REGISTERED' && (
+                <button
+                  type="button"
+                  className="btn-danger-soft"
+                  disabled={drop.isPending}
+                  onClick={() => {
+                    const reason = window.prompt(cn('Reason for dropping this course:', 'سبب حذف المادة:'));
+                    if (reason) drop.mutate({ id: enrollment.id, reason });
+                  }}
+                >
+                  {L.dropCourse}
+                </button>
+              )}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-tint">{L.syllabus}</button>
-            <button style={{ padding: '9px 16px', background: '#fff', color: '#EF4444', border: '1px solid #FCA5A5', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{L.dropCourse}</button>
-          </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </AsyncState>
   );
 }
 
 export function StudentGrades() {
-  const { L, cn } = useStore();
+  const { L, ar, cn, toast } = useStore();
+  const transcript = useTranscriptQuery();
+  const appeal = useMutation({
+    mutationFn: ({ finalGradeId, reason }: { finalGradeId: string; reason: string }) =>
+      gradesApi.appeal(finalGradeId, reason),
+    onSuccess: () => toast(cn('Grade appeal submitted.', 'تم إرسال طلب مراجعة الدرجة.')),
+    onError: (error) => toast(error instanceof ApiError ? error.code : 'REQUEST_FAILED'),
+  });
+  const requestAppeal = (finalGradeId: string) => {
+    const reason = window.prompt(cn('Explain the reason for this grade appeal:', 'اشرح سبب طلب مراجعة الدرجة:'));
+    if (reason) appeal.mutate({ finalGradeId, reason });
+  };
+  const current = transcript.data?.terms[0];
   return (
-    <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
-        <div className="card card-pad" style={{ textAlign: 'center' }}><div style={{ fontSize: 13, color: '#6B7280' }}>{L.cumGpa}</div><div style={{ fontSize: 32, fontWeight: 800, color: '#13737A', marginTop: 6 }}>3.62</div></div>
-        <div className="card card-pad" style={{ textAlign: 'center' }}><div style={{ fontSize: 13, color: '#6B7280' }}>{L.semGpa}</div><div style={{ fontSize: 32, fontWeight: 800, marginTop: 6 }}>3.74</div></div>
-        <div className="card card-pad" style={{ textAlign: 'center' }}><div style={{ fontSize: 13, color: '#6B7280' }}>{L.standing}</div><div style={{ fontSize: 20, fontWeight: 700, color: '#10B981', marginTop: 12 }}>{L.goodStanding}</div></div>
+    <AsyncState loading={transcript.isLoading} error={transcript.error} empty={!current}>
+      <div className="grid-stats">
+        <div className="stat">
+          <div className="lbl">{L.cumGpa}</div>
+          <div className="val">{transcript.data?.student.cumulativeGpa ?? '—'}</div>
+        </div>
+        <div className="stat">
+          <div className="lbl">{L.semGpa}</div>
+          <div className="val">{current?.semesterGpa ?? '—'}</div>
+        </div>
+        <div className="stat">
+          <div className="lbl">{L.standing}</div>
+          <div className="val status-good">{transcript.data?.student.standing}</div>
+        </div>
       </div>
       <div className="tbl-wrap">
-        <div className="tbl-head">{L.semesterGrades} · {cn('Fall 2026', 'خريف ٢٠٢٦')}</div>
+        <div className="tbl-head">
+          {L.semesterGrades} · {current ? (ar ? current.term.nameAr : current.term.nameEn) : ''}
+        </div>
         <table>
-          <thead><tr><th style={{ paddingInlineStart: 22 }}>{L.thCode}</th><th>{L.thCourse}</th><th style={{ textAlign: 'center' }}>{L.creditsLabel}</th><th style={{ textAlign: 'center' }}>{L.gradeLabel}</th><th style={{ textAlign: 'center', paddingInlineEnd: 22 }}>{L.pointsLabel}</th></tr></thead>
+          <thead>
+            <tr>
+              <th>{L.thCode}</th>
+              <th>{L.thCourse}</th>
+              <th>{L.creditsLabel}</th>
+              <th>{L.gradeLabel}</th>
+              <th>{L.pointsLabel}</th>
+              <th />
+            </tr>
+          </thead>
           <tbody>
-            {GRADES.map((g) => (
-              <tr key={g[0]}>
-                <td style={{ paddingInlineStart: 22, fontWeight: 700, color: '#13737A' }}>{g[0]}</td>
-                <td>{cn(g[1], g[2])}</td>
-                <td style={{ textAlign: 'center' }}>{g[3]}</td>
-                <td style={{ textAlign: 'center' }}><GradeBadge g={g[4] as string} /></td>
-                <td style={{ textAlign: 'center', paddingInlineEnd: 22, fontWeight: 600 }}>{(g[5] as number).toFixed(1)}</td>
+            {current?.courses.map((course) => (
+              <tr key={course.code}>
+                <td>
+                  <strong>{course.code}</strong>
+                </td>
+                <td>{ar ? course.nameAr : course.nameEn}</td>
+                <td>{course.credits}</td>
+                <td>{course.letterGrade ? <GradeBadge g={course.letterGrade} /> : '—'}</td>
+                <td>{course.gradePoints ?? '—'}</td>
+                <td>
+                  {course.finalGradeId && (
+                    <button
+                      className="btn-ghost"
+                      disabled={appeal.isPending}
+                      onClick={() => requestAppeal(course.finalGradeId!)}
+                    >
+                      {L.gradeAppeal}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div style={{ padding: '14px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8F9FA' }}>
-          <button className="btn-ghost">{L.gradeAppeal}</button>
-          <a href="#" onClick={(e) => e.preventDefault()}>{L.viewAll} →</a>
-        </div>
       </div>
-    </>
+    </AsyncState>
   );
 }
 
 export function StudentAttendance() {
-  const { L, cn } = useStore();
+  const { L, ar } = useStore();
+  const summary = useAttendanceSummaryQuery();
+  const total = summary.data?.reduce((sum, row) => sum + row.total, 0) ?? 0;
+  const weighted = summary.data?.reduce((sum, row) => sum + row.attendancePercent * row.total, 0) ?? 0;
+  const overall = total ? Math.trunc(weighted / total) : 0;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
-      <div className="card card-pad" style={{ textAlign: 'center' }}>
-        <div className="progress-ring" style={{ background: 'conic-gradient(#10B981 0 88%,#F1F3F4 88%)' }}>
-          <div className="hole"><div style={{ fontSize: 34, fontWeight: 800, color: '#10B981' }}>88%</div><div style={{ fontSize: 11, color: '#9CA3AF' }}>{L.overallAtt}</div></div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: 13 }}>
-          <div><div style={{ fontWeight: 800, fontSize: 20, color: '#EF4444' }}>6</div><div style={{ color: '#6B7280' }}>{L.absences}</div></div>
-          <div><div style={{ fontWeight: 800, fontSize: 20, color: '#F59E0B' }}>3</div><div style={{ color: '#6B7280' }}>{L.tardies}</div></div>
-        </div>
-      </div>
-      <div className="card card-pad">
-        <SectionTitle>{L.byCourse}</SectionTitle>
-        {ATT.map((a) => {
-          const c = a[3] >= 85 ? '#10B981' : a[3] >= 75 ? '#F59E0B' : '#EF4444';
-          return (
-            <div key={a[0]} style={{ padding: '13px 0', borderBottom: '1px solid #F1F3F4' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}><span style={{ fontWeight: 600 }}>{a[0]} · {cn(a[1], a[2])}</span><span style={{ fontWeight: 700, color: c }}>{a[3]}%</span></div>
-              <Bar pct={a[3]} color={c} />
+    <AsyncState loading={summary.isLoading} error={summary.error} empty={!summary.data?.length}>
+      <div className="responsive-two-column">
+        <div className="card card-pad center">
+          <div
+            className="progress-ring"
+            style={{
+              background: `conic-gradient(${overall >= 75 ? '#10B981' : '#EF4444'} 0 ${overall}%,#F1F3F4 ${overall}%)`,
+            }}
+          >
+            <div className="hole">
+              <div className="big">{overall}%</div>
+              <small>{L.overallAtt}</small>
             </div>
-          );
-        })}
+          </div>
+        </div>
+        <div className="card card-pad">
+          <SectionTitle>{L.byCourse}</SectionTitle>
+          {summary.data?.map((row) => {
+            const color = row.attendancePercent >= row.thresholdPercent ? '#10B981' : '#EF4444';
+            return (
+              <div key={row.course.code} className="metric-row">
+                <div className="row-between">
+                  <strong>
+                    {row.course.code} · {ar ? row.course.nameAr : row.course.nameEn}
+                  </strong>
+                  <strong style={{ color }}>{row.attendancePercent}%</strong>
+                </div>
+                <Bar pct={row.attendancePercent} color={color} />
+                <small>
+                  {L.absences}: {row.effectiveAbsences} · {L.tardies}: {row.late}
+                </small>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </AsyncState>
   );
 }
 
 export function StudentTranscript() {
-  const { L, cn } = useStore();
-  const reqs: [string, string, string, string][] = [
-    [cn('Core CS', 'متطلبات التخصص'), cn('48 / 60 cr', '٤٨ / ٦٠ س'), 'check', '#10B981'],
-    [cn('Mathematics', 'الرياضيات'), cn('18 / 18 cr', '١٨ / ١٨ س'), 'check', '#10B981'],
-    [cn('University Req.', 'متطلبات الجامعة'), cn('21 / 30 cr', '٢١ / ٣٠ س'), 'clock', '#F59E0B'],
-    [cn('Electives', 'اختيارية'), cn('9 / 24 cr', '٩ / ٢٤ س'), 'clock', '#F59E0B'],
-  ];
+  const { L, ar, cn } = useStore();
+  const transcript = useTranscriptQuery();
   return (
-    <>
+    <AsyncState loading={transcript.isLoading} error={transcript.error} empty={!transcript.data?.terms.length}>
       <div className="card card-pad" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <SectionTitle style={{ margin: 0 }}>{L.degreeProgress}</SectionTitle>
-          <button className="btn-teal"><Icon name="download" size={15} /> {L.printReceipt}</button>
+        <div className="row-between">
+          <SectionTitle>{L.gradeHistory}</SectionTitle>
+          <button className="btn-teal" onClick={() => window.print()}>
+            <Icon name="download" size={15} /> {L.printReceipt}
+          </button>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}><span style={{ color: '#6B7280' }}>{L.creditsCompleted}</span><span style={{ fontWeight: 700 }}>96 / 132</span></div>
-        <div style={{ height: 12, background: '#F1F3F4', borderRadius: 6, overflow: 'hidden', marginBottom: 20 }}><div style={{ height: '100%', width: '72%', background: 'linear-gradient(90deg,#13737A,#D4AF37)', borderRadius: 6 }} /></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-          {reqs.map((r, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: '#F8F9FA', borderRadius: 10 }}>
-              <span style={{ color: r[3] }}><Icon name={r[2]} size={18} /></span>
-              <div><div style={{ fontSize: 13, fontWeight: 600 }}>{r[0]}</div><div style={{ fontSize: 11, color: '#9CA3AF' }}>{r[1]}</div></div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="tbl-wrap">
-        <div className="tbl-head">{L.gradeHistory}</div>
-        {TS.map((t) => (
-          <div key={t[0]} style={{ padding: '16px 22px', borderBottom: '1px solid #F1F3F4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div><div style={{ fontWeight: 600, fontSize: 14 }}>{cn(t[0], t[1])}</div><div style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>{cn(t[2], t[3])} · {t[4]} {L.creditsLabel}</div></div>
-            <div style={{ textAlign: 'center' }}><div style={{ fontSize: 11, color: '#9CA3AF' }}>GPA</div><div style={{ fontWeight: 800, fontSize: 18, color: '#13737A' }}>{(t[5] as number).toFixed(2)}</div></div>
+        <div className="row-between">
+          <div>
+            <strong>
+              {transcript.data ? (ar ? transcript.data.student.nameAr : transcript.data.student.nameEn) : ''}
+            </strong>
+            <small>{transcript.data?.student.universityId}</small>
           </div>
-        ))}
+          <div>
+            <small>{L.cumGpa}</small>
+            <strong className="gpa-inline">{transcript.data?.student.cumulativeGpa}</strong>
+          </div>
+        </div>
       </div>
-    </>
+      {transcript.data?.terms.map((term) => (
+        <div className="tbl-wrap" key={term.term.id}>
+          <div className="tbl-head row-between">
+            <span>{ar ? term.term.nameAr : term.term.nameEn}</span>
+            <span>GPA {term.semesterGpa}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>{L.thCode}</th>
+                <th>{L.thCourse}</th>
+                <th>{L.creditsLabel}</th>
+                <th>{L.gradeLabel}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {term.courses.map((course) => (
+                <tr key={course.code}>
+                  <td>{course.code}</td>
+                  <td>{ar ? course.nameAr : course.nameEn}</td>
+                  <td>{course.credits}</td>
+                  <td>{course.letterGrade ?? cn('In progress', 'قيد الدراسة')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </AsyncState>
   );
 }

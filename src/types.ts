@@ -1,15 +1,37 @@
 export type Lang = 'ar' | 'en';
 
 export type Role =
-  | 'student' | 'instructor' | 'advisor' | 'registrar'
-  | 'admin' | 'depthead' | 'coordinator' | 'dean' | 'uniregistrar';
+  | 'student'
+  | 'instructor'
+  | 'advisor'
+  | 'registrar'
+  | 'admin'
+  | 'depthead'
+  | 'coordinator'
+  | 'dean'
+  | 'uniregistrar';
 
-export type ModalKind = 'approval' | 'denied' | null;
+export type ModalKind = 'denied' | null;
 
 export type Dict = Record<string, string>;
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  universityId: string | null;
+  employeeId: string | null;
+  nameEn: string;
+  nameAr: string;
+  preferredLanguage: string;
+  roles: Role[];
+  activeRole: Role;
+  permissions: string[];
+  studentProfile: Record<string, unknown> | null;
+  employeeProfile: Record<string, unknown> | null;
+}
+
 export interface AppState {
-  view: 'login' | 'app';
+  view: 'loading' | 'login' | 'app';
   lang: Lang;
   loginRole: Role;
   role: Role;
@@ -18,6 +40,6 @@ export interface AppState {
   modal: ModalKind;
   loginLoading: boolean;
   showPw: boolean;
-  att: Record<string, 'p' | 'a'>;
-  regFilter: string;
+  user: AuthUser | null;
+  loginError: string | null;
 }

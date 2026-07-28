@@ -1,0 +1,12 @@
+node_modules
+dist
+server/dist
+coverage
+server/coverage
+playwright-report
+test-results
+tmp
+package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+docs/baseline

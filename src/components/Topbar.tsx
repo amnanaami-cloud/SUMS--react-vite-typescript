@@ -1,6 +1,6 @@
 import { Icon } from '../icons';
 import { useStore } from '../store';
-import { NAMES, AVATAR } from '../data';
+import { AVATAR } from '../data';
 
 interface TopbarProps {
   title: string;
@@ -8,21 +8,18 @@ interface TopbarProps {
   onSidebarToggle: () => void;
 }
 
-export function Topbar({
-  title,
-  sidebarOpen,
-  onSidebarToggle,
-}: TopbarProps) {
-  const {
-    s,
-    L,
-    ar,
-    cn,
-    toggleLang,
-    toast,
-  } = useStore();
+export function Topbar({ title, sidebarOpen, onSidebarToggle }: TopbarProps) {
+  const { s, L, ar, cn, toggleLang, toast } = useStore();
 
-  const nm = NAMES[s.role];
+  const displayName = s.user ? (ar ? s.user.nameAr : s.user.nameEn) : cn('SUMS User', 'مستخدم النظام');
+  const initials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase() || 'SU';
 
   return (
     <header className="topbar">
@@ -32,53 +29,30 @@ export function Topbar({
             type="button"
             className="sidebar-open-btn"
             onClick={onSidebarToggle}
-            aria-label={
-              ar
-                ? 'فتح القائمة الجانبية'
-                : 'Open sidebar'
-            }
-            title={
-              ar
-                ? 'فتح القائمة الجانبية'
-                : 'Open sidebar'
-            }
+            aria-label={ar ? 'فتح القائمة الجانبية' : 'Open sidebar'}
+            title={ar ? 'فتح القائمة الجانبية' : 'Open sidebar'}
           >
             <Icon name="menu" size={20} />
           </button>
         )}
 
         <div>
-          <div className="role-label">
-            {L['r_' + s.role]}
-          </div>
+          <div className="role-label">{L['r_' + s.role]}</div>
 
           <h1>{title}</h1>
         </div>
       </div>
 
       <div className="top-actions">
-        <button
-          type="button"
-          className="chip-btn"
-          onClick={toggleLang}
-        >
+        <button type="button" className="chip-btn" onClick={toggleLang}>
           {ar ? 'English' : 'العربية'}
         </button>
 
         <button
           type="button"
           className="icon-btn"
-          onClick={() =>
-            toast(
-              cn(
-                'No new notifications',
-                'لا توجد إشعارات جديدة'
-              )
-            )
-          }
-          aria-label={
-            ar ? 'الإشعارات' : 'Notifications'
-          }
+          onClick={() => toast(cn('No new notifications', 'لا توجد إشعارات جديدة'))}
+          aria-label={ar ? 'الإشعارات' : 'Notifications'}
         >
           <Icon name="bell" size={18} />
           <span className="bell-dot" />
@@ -93,7 +67,7 @@ export function Topbar({
             background: AVATAR[s.role],
           }}
         >
-          {nm[2]}
+          {initials}
         </div>
       </div>
     </header>

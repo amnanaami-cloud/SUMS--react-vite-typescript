@@ -51,6 +51,14 @@ export function App() {
     };
   }, [s.view, sidebarOpen]);
 
+  if (s.view === 'loading') {
+    return (
+      <div className="login-wrap" role="status">
+        <span className="spinner" /> Loading SUMS…
+      </div>
+    );
+  }
+
   if (s.view === 'login') {
     return (
       <>
@@ -60,15 +68,10 @@ export function App() {
     );
   }
 
-  const title =
-    s.screen === 'profile'
-      ? L.m_profile
-      : L['m_' + s.screen] || s.screen;
+  const title = s.screen === 'profile' ? L.m_profile : L['m_' + s.screen] || s.screen;
 
   const built = BUILT[s.role].includes(s.screen);
-  const Screen = built
-    ? SCREENS[screenKey(s.role, s.screen)]
-    : undefined;
+  const Screen = built ? SCREENS[screenKey(s.role, s.screen)] : undefined;
 
   const dark = s.role === 'admin';
 
@@ -87,19 +90,11 @@ export function App() {
   return (
     <>
       <div
-        className={[
-          'app',
-          dark ? 'dark' : '',
-          sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
-        ]
+        className={['app', dark ? 'dark' : '', sidebarOpen ? 'sidebar-open' : 'sidebar-closed']
           .filter(Boolean)
           .join(' ')}
       >
-        <Sidebar
-          isOpen={sidebarOpen}
-          onToggle={toggleSidebar}
-          onNavigate={closeSidebarOnMobile}
-        />
+        <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} onNavigate={closeSidebarOnMobile} />
 
         {/* خلفية الموبايل عند فتح السايدبار */}
         <button
@@ -110,22 +105,11 @@ export function App() {
         />
 
         <main className="main">
-          <Topbar
-            title={title}
-            sidebarOpen={sidebarOpen}
-            onSidebarToggle={toggleSidebar}
-          />
+          <Topbar title={title} sidebarOpen={sidebarOpen} onSidebarToggle={toggleSidebar} />
 
           <div className="content">
-            <div
-              className="content-inner"
-              key={s.role + s.screen}
-            >
-              {Screen ? (
-                <Screen />
-              ) : (
-                <Placeholder title={title} />
-              )}
+            <div className="content-inner" key={s.role + s.screen}>
+              {Screen ? <Screen /> : <Placeholder title={title} />}
             </div>
           </div>
         </main>
