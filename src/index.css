@@ -143,3 +143,232 @@ tbody tr{border-top:1px solid #F1F3F4}
 .btn-tint{padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:var(--primary-tint);color:var(--primary)}
 .pill{padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;background:#fff;color:var(--n500);border:1px solid var(--n100)}
 .pill.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+
+/* Collapsible Sidebar */
+.app {
+  position: relative;
+}
+
+/* حركة السايدبار */
+.sidebar {
+  width: 260px;
+  overflow: hidden;
+  z-index: 30;
+  transition:
+    width 0.25s ease,
+    opacity 0.2s ease,
+    transform 0.25s ease;
+}
+
+/*
+  تثبيت عرض المحتوى الداخلي أثناء حركة الإغلاق
+  حتى لا تنزل الكلمات على أكثر من سطر
+*/
+.sb-head,
+.sb-nav,
+.sb-foot {
+  width: 260px;
+}
+
+/* إخفاء السايدبار على الكمبيوتر */
+.app.sidebar-closed .sidebar {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  border-inline-end: 0;
+}
+
+/* زر الإغلاق داخل السايدبار */
+.sidebar-toggle {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--n200);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--n700);
+  cursor: pointer;
+
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--primary-tint);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.sidebar-toggle:active {
+  transform: scale(0.94);
+}
+
+/* منع النصوص من تجاوز عرض السايدبار */
+.sb-brand-text,
+.user-details {
+  min-width: 0;
+}
+
+.sb-brand-text {
+  flex: 1;
+}
+
+/* بداية الـTopbar: زر القائمة + العنوان */
+.topbar-leading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* زر فتح السايدبار */
+.sidebar-open-btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--divider, #e8eaed);
+  border-radius: 10px;
+  background: var(--chip, #f8f9fa);
+  color: var(--primary);
+  cursor: pointer;
+
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.sidebar-open-btn:hover {
+  background: var(--primary-tint);
+  border-color: var(--primary);
+}
+
+.sidebar-open-btn:active {
+  transform: scale(0.94);
+}
+
+/* الخلفية تظهر على الموبايل فقط */
+.sidebar-backdrop {
+  display: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* زر الإغلاق داخل Dark Mode */
+.app.dark .sidebar-toggle {
+  background: #374151;
+  border-color: #4b5563;
+  color: var(--secondary);
+}
+
+.app.dark .sidebar-toggle:hover {
+  background: #4b5563;
+}
+
+
+
+  /* Mobile Sidebar Drawer */ 
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    inset-inline-start: 0;
+
+    width: min(260px, 88vw);
+    height: 100vh;
+    height: 100dvh;
+
+    opacity: 1;
+    box-shadow: 0 12px 35px rgba(15, 23, 42, 0.2);
+  }
+
+  .sb-head,
+  .sb-nav,
+  .sb-foot {
+    width: min(260px, 88vw);
+  }
+
+  /*
+    على الموبايل لا نجعل العرض صفرًا،
+    بل نحرك السايدبار خارج الشاشة.
+  */
+  .app.sidebar-closed .sidebar {
+    width: min(260px, 88vw);
+    opacity: 1;
+    pointer-events: none;
+  }
+
+  /* إغلاق السايدبار نحو اليسار في الإنجليزية */
+  html[dir='ltr'] .app.sidebar-closed .sidebar {
+    transform: translateX(-100%);
+  }
+
+  /* إغلاق السايدبار نحو اليمين في العربية */
+  html[dir='rtl'] .app.sidebar-closed .sidebar {
+    transform: translateX(100%);
+  }
+
+  .app.sidebar-open .sidebar {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  /* الخلفية السوداء الشفافة */
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+
+    display: block;
+    background: rgba(15, 23, 42, 0.4);
+
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+
+    transition: opacity 0.25s ease;
+  }
+
+  .app.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .topbar {
+    padding: 14px 16px;
+  }
+
+  .topbar h1 {
+    font-size: 20px;
+  }
+
+  .content {
+    padding: 20px 16px 36px;
+  }
+
+  .top-actions {
+    gap: 8px;
+  }
+
+  .chip-btn {
+    padding: 7px 10px;
+  }
+}
