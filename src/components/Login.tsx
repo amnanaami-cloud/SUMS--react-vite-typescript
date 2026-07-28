@@ -23,10 +23,10 @@ export function Login() {
             ))}
           </div>
           <label className="field-label">{L.email}</label>
-          <input className="inp" style={{ marginBottom: 16 }} defaultValue={(s.loginRole === 'student' ? 'student' : s.loginRole) + '@up.edu.ps'} />
+          <input className="inp" style={{ marginBottom: 16 }} placeholder={ (s.loginRole === 'student' ? 'student' : s.loginRole) + '@up.edu.ps' } />
           <label className="field-label">{L.pwd}</label>
           <div className="pw-wrap">
-            <input className="inp" type={s.showPw ? 'text' : 'password'} defaultValue="············" style={{ paddingInlineEnd: 44 }} />
+            <input className="inp" type={s.showPw ? 'text' : 'password'} placeholder="············" style={{ paddingInlineEnd: 44 }} />
             <button className="pw-toggle" onClick={togglePw}><Icon name={s.showPw ? 'eyeoff' : 'eye'} size={18} /></button>
           </div>
           <div className="row-between" style={{ marginBottom: 20 }}>
