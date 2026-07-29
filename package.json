@@ -3,21 +3,60 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Smart University Management System — University of Palestine (bilingual AR/EN, 9 roles)",
+  "description": "Smart University Management System - bilingual full-stack academic management",
+  "workspaces": [
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "dev": "concurrently -k -n WEB,API -c cyan,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "vite",
+    "dev:api": "npm run start:dev --workspace=@sums/api",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "tsc -b && vite build",
+    "build:api": "npm run build --workspace=@sums/api",
+    "typecheck": "npm run typecheck:web && npm run typecheck:api",
+    "typecheck:web": "tsc -b --pretty false",
+    "typecheck:api": "npm run typecheck --workspace=@sums/api",
+    "preview": "vite preview",
+    "test": "npm run test:web && npm run test:api",
+    "test:web": "vitest run",
+    "test:api": "npm run test --workspace=@sums/api",
+    "test:api:e2e": "npm run test:e2e --workspace=@sums/api",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "npm run db:generate --workspace=@sums/api",
+    "db:migrate": "npm run db:migrate --workspace=@sums/api",
+    "db:seed": "npm run db:seed --workspace=@sums/api",
+    "db:reset:dev": "npm run db:reset:dev --workspace=@sums/api",
+    "prisma:format": "npm run prisma:format --workspace=@sums/api",
+    "prisma:validate": "npm run prisma:validate --workspace=@sums/api",
+    "openapi:export": "npm run openapi:export --workspace=@sums/api"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@tanstack/react-query": "5.101.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+    "@eslint/js": "9.39.2",
+    "@playwright/test": "1.55.1",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.0",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "6.0.4",
+    "concurrently": "9.2.1",
+    "eslint": "9.39.2",
+    "eslint-plugin-react-hooks": "7.0.1",
+    "eslint-plugin-react-refresh": "0.4.24",
+    "globals": "16.5.0",
+    "jsdom": "27.0.0",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.1",
+    "vite": "8.1.5",
+    "vitest": "3.2.4"
   }
 }

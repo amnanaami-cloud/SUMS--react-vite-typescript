@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { AppState, Lang, Role, ModalKind, Dict } from './types';
 import { D } from './i18n';
+import { authApi } from './api/auth';
+import { ApiError } from './api/errors';
+import { onSessionExpired, onSessionUpdated, setAccessToken } from './api/client';
 
 interface Store {
   s: AppState;
@@ -12,12 +15,9 @@ interface Store {
   nav: (screen: string) => void;
   toggleLang: () => void;
   togglePw: () => void;
-  signIn: () => void;
-  logout: () => void;
+  signIn: (identifier: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   toggleCart: (code: string) => void;
-  setAtt: (id: string, v: 'p' | 'a') => void;
-  allAtt: (v: 'p' | 'a', ids: string[]) => void;
-  setRegFilter: (f: string) => void;
   openModal: (m: ModalKind) => void;
   closeModal: () => void;
   toast: (msg: string) => void;
@@ -32,8 +32,17 @@ export const useStore = () => {
 };
 
 const INITIAL: AppState = {
-  view: 'login', lang: 'en', loginRole: 'student', role: 'student', screen: 'dashboard',
-  cart: ['CS340', 'CS355'], modal: null, loginLoading: false, showPw: false, att: {}, regFilter: 'submitted',
+  view: 'loading',
+  lang: 'en',
+  loginRole: 'student',
+  role: 'student',
+  screen: 'dashboard',
+  cart: [],
+  modal: null,
+  loginLoading: false,
+  showPw: false,
+  user: null,
+  loginError: null,
 };
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -46,19 +55,65 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const cn = useCallback((en: string, arv: string) => (s.lang === 'ar' ? arv : en), [s.lang]);
   const t = useCallback((key: string) => D[s.lang][key] ?? key, [s.lang]);
 
+  useEffect(() => {
+    let active = true;
+    onSessionExpired(() => {
+      if (active) setS((p) => ({ ...p, view: 'login', user: null, loginError: 'SESSION_EXPIRED', modal: null }));
+    });
+    onSessionUpdated(({ user }) => {
+      if (active)
+        setS((p) => ({
+          ...p,
+          view: 'app',
+          user,
+          role: user.activeRole,
+          loginRole: user.activeRole,
+          screen: 'dashboard',
+          loginError: null,
+        }));
+    });
+    void authApi.restore().catch(() => {
+      setAccessToken(null);
+      if (active) setS((p) => ({ ...p, view: 'login', user: null }));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const setLoginRole = (r: Role) => setS((p) => ({ ...p, loginRole: r }));
   const nav = (screen: string) => setS((p) => ({ ...p, screen }));
   const toggleLang = () => setS((p) => ({ ...p, lang: (p.lang === 'en' ? 'ar' : 'en') as Lang }));
   const togglePw = () => setS((p) => ({ ...p, showPw: !p.showPw }));
-  const signIn = () => {
-    setS((p) => ({ ...p, loginLoading: true }));
-    window.setTimeout(() => setS((p) => ({ ...p, view: 'app', role: p.loginRole, screen: 'dashboard', loginLoading: false })), 750);
+  const signIn = async (identifier: string, password: string) => {
+    setS((p) => ({ ...p, loginLoading: true, loginError: null }));
+    try {
+      const result = await authApi.login(identifier.trim(), password, s.loginRole);
+      setS((p) => ({
+        ...p,
+        view: 'app',
+        role: result.user.activeRole,
+        loginRole: result.user.activeRole,
+        user: result.user,
+        screen: 'dashboard',
+        loginLoading: false,
+      }));
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : 'REQUEST_FAILED';
+      setS((p) => ({ ...p, loginLoading: false, loginError: code }));
+      throw error;
+    }
   };
-  const logout = () => setS((p) => ({ ...p, view: 'login', modal: null, screen: 'dashboard' }));
-  const toggleCart = (code: string) => setS((p) => ({ ...p, cart: p.cart.includes(code) ? p.cart.filter((c) => c !== code) : [...p.cart, code] }));
-  const setAtt = (id: string, v: 'p' | 'a') => setS((p) => ({ ...p, att: { ...p.att, [id]: v } }));
-  const allAtt = (v: 'p' | 'a', ids: string[]) => setS((p) => { const m: Record<string, 'p' | 'a'> = {}; ids.forEach((id) => (m[id] = v)); return { ...p, att: m }; });
-  const setRegFilter = (f: string) => setS((p) => ({ ...p, regFilter: f }));
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      setAccessToken(null);
+    }
+    setS((p) => ({ ...p, view: 'login', user: null, modal: null, screen: 'dashboard' }));
+  };
+  const toggleCart = (code: string) =>
+    setS((p) => ({ ...p, cart: p.cart.includes(code) ? p.cart.filter((c) => c !== code) : [...p.cart, code] }));
   const openModal = (m: ModalKind) => setS((p) => ({ ...p, modal: m }));
   const closeModal = () => setS((p) => ({ ...p, modal: null }));
   const toast = (msg: string) => {
@@ -67,6 +122,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     timer.current = window.setTimeout(() => setToastMsg(null), 2200);
   };
 
-  const value: Store = { s, L, ar, cn, t, setLoginRole, nav, toggleLang, togglePw, signIn, logout, toggleCart, setAtt, allAtt, setRegFilter, openModal, closeModal, toast, toastMsg };
+  const value: Store = {
+    s,
+    L,
+    ar,
+    cn,
+    t,
+    setLoginRole,
+    nav,
+    toggleLang,
+    togglePw,
+    signIn,
+    logout,
+    toggleCart,
+    openModal,
+    closeModal,
+    toast,
+    toastMsg,
+  };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

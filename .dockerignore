@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+server/dist
+coverage
+server/coverage
+tmp
+.env
+**/.env
+**/.env.*
+*.log
+docs/baseline

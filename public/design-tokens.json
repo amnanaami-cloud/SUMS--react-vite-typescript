@@ -14,16 +14,30 @@
       "gold": { "value": "#D4AF37", "comment": "Prestige, decorative rules, seal accent" }
     },
     "neutral": {
-      "50": "#F8F9FA", "100": "#E8EAED", "200": "#D1D5DB",
-      "400": "#9CA3AF", "500": "#6B7280", "700": "#374151", "900": "#1F2937"
+      "50": "#F8F9FA",
+      "100": "#E8EAED",
+      "200": "#D1D5DB",
+      "400": "#9CA3AF",
+      "500": "#6B7280",
+      "700": "#374151",
+      "900": "#1F2937"
     },
     "status": {
-      "success": "#10B981", "error": "#EF4444", "warning": "#F59E0B", "info": "#3B82F6"
+      "success": "#10B981",
+      "error": "#EF4444",
+      "warning": "#F59E0B",
+      "info": "#3B82F6"
     },
     "avatarByRole": {
-      "student": "#BFDBFE", "instructor": "#FBCA89", "advisor": "#A7F3D0",
-      "registrar": "#C7D2FE", "dean": "#F5E0A3", "depthead": "#FBCFE8",
-      "admin": "#9CA3AF", "coordinator": "#FDE68A", "uniregistrar": "#BAE6FD"
+      "student": "#BFDBFE",
+      "instructor": "#FBCA89",
+      "advisor": "#A7F3D0",
+      "registrar": "#C7D2FE",
+      "dean": "#F5E0A3",
+      "depthead": "#FBCFE8",
+      "admin": "#9CA3AF",
+      "coordinator": "#FDE68A",
+      "uniregistrar": "#BAE6FD"
     }
   },
   "typography": {
@@ -48,7 +62,13 @@
   },
   "component": {
     "button": {
-      "primary": { "bg": "{color.brand.primary}", "fg": "#FFFFFF", "hover": "{color.brand.primaryDark}", "radius": "{radius.md}", "padding": "13px 20px" },
+      "primary": {
+        "bg": "{color.brand.primary}",
+        "fg": "#FFFFFF",
+        "hover": "{color.brand.primaryDark}",
+        "radius": "{radius.md}",
+        "padding": "13px 20px"
+      },
       "secondary": { "bg": "{color.brand.primaryTint}", "fg": "{color.brand.primary}" },
       "disabled": { "bg": "{color.neutral.100}", "fg": "{color.neutral.400}" }
     },
@@ -58,7 +78,12 @@
       "focusRing": "0 0 0 3px rgba(19,115,122,0.12)",
       "radius": "{radius.md}"
     },
-    "card": { "bg": "#FFFFFF", "radius": "{radius.lg}", "shadow": "{shadow.card}", "accentBorder": "4px solid <status>" }
+    "card": {
+      "bg": "#FFFFFF",
+      "radius": "{radius.lg}",
+      "shadow": "{shadow.card}",
+      "accentBorder": "4px solid <status>"
+    }
   },
   "i18n": {
     "languages": ["ar", "en"],
