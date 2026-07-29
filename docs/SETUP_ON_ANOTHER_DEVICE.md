@@ -84,7 +84,7 @@ Student demo account:
 Role: Student
 Email: student@up.edu.ps
 University ID: 2202100054
-Password: the SEED_DEMO_PASSWORD used in step 4
+Password: SumsDemo!2026
 ```
 
 The browser page is `/`. The `/api/v1/auth/login` address is a POST-only API endpoint and cannot be opened as a normal page.
