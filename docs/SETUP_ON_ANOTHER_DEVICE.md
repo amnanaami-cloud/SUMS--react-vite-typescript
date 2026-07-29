@@ -16,7 +16,7 @@ Ensure port `8080` is available and Docker Desktop is running.
 Open PowerShell:
 
 ```powershell
-git clone <YOUR-GITHUB-REPOSITORY-URL>
+git clone https://github.com/amnanaami-cloud/SUMS--react-vite-typescript.git
 cd SUMS-repo
 Copy-Item .env.example .env
 notepad .env
@@ -63,7 +63,7 @@ The `migrate` container applies the committed Prisma migrations automatically. I
 Docker does not seed automatically. Set the same development-only password that you placed in `.env`, then run the seed once:
 
 ```powershell
-$env:SEED_DEMO_PASSWORD = '<DEVELOPMENT_ONLY_PASSWORD>'
+$env:SEED_DEMO_PASSWORD = SumsDemo!2026
 docker compose run --rm -e NODE_ENV=development -e SEED_DEMO_PASSWORD migrate ./node_modules/.bin/tsx server/prisma/seed.ts
 Remove-Item Env:SEED_DEMO_PASSWORD
 ```
