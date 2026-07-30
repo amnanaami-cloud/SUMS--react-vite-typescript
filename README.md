@@ -187,6 +187,31 @@ docker compose ps
 
 Both requests should return `200`.
 
+## Deploying to Render
+
+Create one Render **Web Service** from this repository and select the Docker runtime.
+
+- Dockerfile path: `./Dockerfile.render`
+- Health check path: `/healthz`
+- Frontend/API origin: the service's public Render URL
+
+The image builds both applications, serves the React bundle through Nginx, and proxies `/api` to the NestJS API on internal port `3000`. Nginx listens on Render's public `PORT`. The frontend is built with `VITE_API_BASE_URL=/api/v1`, so browser API calls and the Strict refresh cookie remain same-origin.
+
+Configure these Render environment variables:
+
+| Variable                   | Example or requirement                                             |
+| -------------------------- | ------------------------------------------------------------------ |
+| `NODE_ENV`                 | `production`                                                       |
+| `DATABASE_URL`             | Render PostgreSQL internal connection URL                          |
+| `JWT_ACCESS_SECRET`        | Random secret containing at least 32 characters                    |
+| `COOKIE_SECURE`            | `true`                                                             |
+| `CORS_ORIGINS`             | Exact public URL, such as `https://your-service.onrender.com`      |
+| `SEED_ON_START`            | `false`; use `true` only for a disposable demonstration deployment |
+| `REFRESH_TOKEN_TTL_DAYS`   | `7`                                                                |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900`                                                              |
+
+The startup script applies committed Prisma migrations before starting the API. When `SEED_ON_START=true`, it also runs the fictional development seed; set `SEED_DEMO_PASSWORD` to a development-only value in that case. Never enable demo seeding for a real production database.
+
 ## Development users and passwords
 
 All accounts below are fictional and intended only for local development.
